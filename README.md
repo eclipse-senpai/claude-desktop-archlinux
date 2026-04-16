@@ -1,22 +1,16 @@
 # claude-desktop-archlinux
 
-Unofficial Arch Linux package for [Claude Desktop](https://claude.ai/download).
-
-It wraps [`aaddrick/claude-desktop-debian`](https://github.com/aaddrick/claude-desktop-debian) in a PKGBUILD so `pacman` owns the install cleanly. No `debtap`, no stray files.
-
-Not on the AUR. If you'd rather have an AUR package, [`claude-desktop-bin`](https://aur.archlinux.org/packages/claude-desktop-bin) works too.
+Arch Linux PKGBUILD for Anthropic's Claude Desktop. The actual extraction and Electron repack is done by [`aaddrick/claude-desktop-debian`](https://github.com/aaddrick/claude-desktop-debian); this repo wraps that work in an Arch package, with a small patch on top.
 
 ## Install
-
-One line:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eclipse-senpai/claude-desktop-archlinux/main/install.sh | bash
 ```
 
-The script clones this repo to `~/.cache/claude-desktop-archlinux`, installs any missing build deps, and runs `makepkg -si`. Safe to run more than once.
+The script clones this repo to `~/.cache/claude-desktop-archlinux`, installs any missing build deps through sudo, then runs `makepkg -si`. Re-running it pulls and rebuilds.
 
-Or do it yourself:
+To build it yourself:
 
 ```bash
 git clone https://github.com/eclipse-senpai/claude-desktop-archlinux
@@ -30,13 +24,13 @@ makepkg -si
 bash ~/.cache/claude-desktop-archlinux/claudeupdate.sh
 ```
 
-Or via curl:
+Or through curl:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eclipse-senpai/claude-desktop-archlinux/main/claudeupdate.sh | bash
 ```
 
-It pulls the repo, checks if upstream Claude Desktop has a newer version, and rebuilds only if there's something new. If you're already on the latest, it exits.
+It pulls the repo, checks upstream's `build.sh` for the current Claude version, and compares with what pacman has installed. If they match, nothing happens. If upstream has moved ahead, it rebuilds.
 
 ## Uninstall
 
@@ -46,15 +40,15 @@ sudo pacman -R claude-desktop
 
 ## Dependencies
 
-Runtime: `gtk3`, `nss`, `alsa-lib`, `libsecret`, `libnotify`, `libxss`, `nspr`. Normal Electron stuff, pulled in by pacman.
+Runtime: `gtk3`, `nss`, `alsa-lib`, `libsecret`, `libnotify`, `libxss`, `nspr`. Pacman pulls these in automatically.
 
-Build: `icoutils`, `imagemagick`, `7zip`, `nodejs`, `npm`, `wget`. `makepkg -s` grabs whatever's missing.
+Build: `icoutils`, `imagemagick`, `7zip`, `nodejs`, `npm`, `wget`. `makepkg -s` installs any of these that are missing.
 
-No `dpkg` needed. The PKGBUILD skips upstream's `.deb` step and builds the package directly.
+The PKGBUILD intercepts upstream's final dpkg step, so `dpkg` isn't needed on the system.
 
 ## Sandbox
 
-Upstream ships with `--no-sandbox` on `deb`/`nix` builds because the sandbox breaks on some Wayland setups. This PKGBUILD turns it back on. If Claude won't launch on your machine, disable it:
+Upstream passes `--no-sandbox` on `deb` builds because the sandbox breaks on some Wayland setups. I've flipped that back on in the packaged launcher. If Claude won't open on your machine, you can disable it:
 
 ```bash
 CLAUDE_ENABLE_SANDBOX=0 claude-desktop
@@ -62,7 +56,7 @@ CLAUDE_ENABLE_SANDBOX=0 claude-desktop
 
 ## How it works
 
-The `source` array pulls upstream fresh on every build:
+Upstream comes in as a tarball:
 
 ```bash
 source=(
@@ -71,35 +65,35 @@ source=(
 )
 ```
 
-A tarball (~400 KB) instead of a `git+` source, because `makepkg`'s mirror clone of upstream balloons to 13 GB once all the pull-request refs come with it.
+Using the tarball because makepkg's default git handling does a full mirror clone, and upstream's pull-request refs push that to around 13 GB. The tarball is 400 KB.
 
-`prepare()` applies `arch-compat.patch`, which has two fixes on top of upstream `main`:
+`prepare()` applies `arch-compat.patch`. The patch contains two changes:
 
-1. **Regex fixes** in `build.sh` (lines 824, 837, 900, 929). Claude's minifier sometimes names variables with a `$` prefix (like `$m`), and upstream's `grep -oP '\w+'` patterns skip those. The patch loosens them to `\$?\w+`. This belongs upstream, I'll file a PR.
-2. **Sandbox default** in `scripts/launcher-common.sh`. Flips the env guard so the sandbox is on by default on Arch.
+1. **Regex fixes** in upstream `build.sh` at lines 824, 837, 900, 929. Claude's JS minifier sometimes emits variable names with a leading `$` (like `$m`), and the upstream patterns use `grep -oP '\w+'` which won't match that. The patch relaxes them to `\$?\w+`. This belongs upstream; I'll file a PR for it.
+2. **Sandbox default** in `scripts/launcher-common.sh`. The env guard is flipped from `${CLAUDE_ENABLE_SANDBOX:-0}` to `${CLAUDE_ENABLE_SANDBOX:-1}`, so the sandbox runs unless you ask it not to.
 
-`prepare()` also no-ops `scripts/build-deb-package.sh`. The rest of `build.sh` still runs and leaves `build/electron-app/` with the patched `app.asar`, `app.asar.unpacked`, and an Electron tree.
+`prepare()` also replaces `scripts/build-deb-package.sh` with a no-op. The rest of `build.sh` still runs and stages the real output at `build/electron-app/`: patched `app.asar`, `app.asar.unpacked`, and a local Electron tree.
 
-`package()` drops that into `$pkgdir`:
+`package()` installs that into `$pkgdir`:
 
-- `/usr/lib/claude-desktop/node_modules/` (Electron + launcher library)
+- `/usr/lib/claude-desktop/node_modules/` with Electron and the launcher library
 - `/usr/lib/claude-desktop/node_modules/electron/dist/resources/app.asar`
-- `/usr/bin/claude-desktop` (launcher, written inline)
+- `/usr/bin/claude-desktop`, a launcher script written inline in the PKGBUILD
 - `/usr/share/applications/claude-desktop.desktop`
 - `/usr/share/icons/hicolor/{16,24,32,48,64,256}x*/apps/claude-desktop.png`
 
-The `.install` hook sets `chmod 4755` on `chrome-sandbox` and refreshes the desktop database.
+The `.install` hook sets `chmod 4755` on `chrome-sandbox` after install and refreshes the desktop database.
 
 ## Trust model
 
-Three bits of code run when you build:
+A few different pieces of code run when you build:
 
-1. **Anthropic's Windows installer.** `build.sh` downloads it from `downloads.claude.ai` and verifies the checksum before extracting. The Electron app that ends up installed is Anthropic's, and its use falls under Anthropic's Terms of Service.
-2. **`aaddrick/claude-desktop-debian`** (Apache-2.0 / MIT). Does the extraction, the JS patching, and the asar repack. Read it if you want to know what runs on your machine.
-3. **This repo.** Small PKGBUILD plus two shell scripts. `LICENSE` covers the packaging only, not Claude itself or the upstream builder.
+1. **Anthropic's Windows installer.** `build.sh` downloads it from `downloads.claude.ai` and verifies the checksum before extracting. What ends up under `/usr/lib/claude-desktop` is Anthropic's proprietary Electron bundle, governed by their Terms of Service.
+2. **[`aaddrick/claude-desktop-debian`](https://github.com/aaddrick/claude-desktop-debian)** (Apache-2.0 / MIT). Where the extraction, asar patching, and repack happen. Worth reading if you want to know what executes on your machine during a build.
+3. **This repo.** The PKGBUILD plus a couple of shell scripts. `LICENSE` applies to those; it doesn't cover Claude Desktop or the upstream builder.
 
 ## Credits
 
 - [Anthropic](https://www.anthropic.com/), who make Claude Desktop.
-- [k3d3](https://github.com/k3d3/claude-desktop-linux-flake), who figured out the original Linux repackaging approach.
+- [k3d3](https://github.com/k3d3/claude-desktop-linux-flake), who worked out how to repack the Windows installer for Linux originally.
 - [aaddrick](https://github.com/aaddrick/claude-desktop-debian), who maintains the Debian builder this repo wraps.
