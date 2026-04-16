@@ -8,6 +8,14 @@ Arch Linux PKGBUILD for Anthropic's Claude Desktop. The actual extraction and El
 curl -fsSL https://raw.githubusercontent.com/eclipse-senpai/claude-desktop-archlinux/main/install.sh | bash
 ```
 
+Safer (review before executing):
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/eclipse-senpai/claude-desktop-archlinux/main/install.sh
+less install.sh
+bash install.sh
+```
+
 The script clones this repo to `~/.cache/claude-desktop-archlinux`, installs any missing build deps through sudo, then runs `makepkg -si`. Re-running it pulls and rebuilds.
 
 To build it yourself:
@@ -28,6 +36,14 @@ Or through curl:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eclipse-senpai/claude-desktop-archlinux/main/claudeupdate.sh | bash
+```
+
+Safer (review before executing):
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/eclipse-senpai/claude-desktop-archlinux/main/claudeupdate.sh
+less claudeupdate.sh
+bash claudeupdate.sh
 ```
 
 It pulls the repo, checks upstream's `build.sh` for the current Claude version, and compares with what pacman has installed. If they match, nothing happens. If upstream has moved ahead, it rebuilds.

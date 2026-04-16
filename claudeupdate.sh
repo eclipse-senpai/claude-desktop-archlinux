@@ -25,8 +25,11 @@ command -v curl >/dev/null 2>&1 || err "curl is required."
 sudo pacman -S --needed --noconfirm git base-devel
 
 if [[ -d $CACHE_DIR/.git ]]; then
+    current_origin="$(git -C "$CACHE_DIR" remote get-url origin 2>/dev/null || true)"
+    [[ $current_origin == "$REPO_URL" ]] \
+        || err "Refusing existing checkout at $CACHE_DIR (origin=$current_origin, expected=$REPO_URL)."
     info "Pulling latest packaging scripts."
-    git -C "$CACHE_DIR" pull --ff-only
+    git -C "$CACHE_DIR" pull --ff-only origin main
 else
     info "No existing checkout; cloning."
     mkdir -p "$(dirname "$CACHE_DIR")"
