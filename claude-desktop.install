@@ -1,0 +1,8 @@
+post_install() {
+	chmod 4755 /usr/lib/claude-desktop/node_modules/electron/dist/chrome-sandbox
+	update-desktop-database -q /usr/share/applications || true
+}
+
+post_upgrade() {
+	post_install
+}

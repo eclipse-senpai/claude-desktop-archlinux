@@ -1,0 +1,60 @@
+diff --git a/build.sh b/build.sh
+index 9c42bb1..f7ce370 100755
+--- a/build.sh
++++ b/build.sh
+@@ -822,7 +822,7 @@ patch_tray_menu_handler() {
+ 	echo "  Found tray function: $tray_func"
+ 
+ 	tray_var=$(grep -oP \
+-		"\}\);let \K\w+(?==null;(?:async )?function ${tray_func})" \
++		"\}\);let \K\\\$?\w+(?==null;(?:async )?function ${tray_func})" \
+ 		"$index_js")
+ 	if [[ -z $tray_var ]]; then
+ 		echo 'Failed to extract tray variable name' >&2
+@@ -835,7 +835,7 @@ patch_tray_menu_handler() {
+ 		"$index_js"
+ 
+ 	first_const=$(grep -oP \
+-		"async function ${tray_func}\(\)\{.*?const \K\w+(?==)" \
++		"async function ${tray_func}\(\)\{.*?const \K\\\$?\w+(?==)" \
+ 		"$index_js" | head -1)
+ 	if [[ -z $first_const ]]; then
+ 		echo 'Failed to extract first const in function' >&2
+@@ -898,7 +898,7 @@ patch_menu_bar_default() {
+ 
+ 	local menu_bar_var
+ 	menu_bar_var=$(grep -oP \
+-		'const \K\w+(?=\s*=\s*\w+\("menuBarEnabled"\))' \
++		'const \K\$?\w+(?=\s*=\s*\$?\w+\("menuBarEnabled"\))' \
+ 		"$index_js" | head -1)
+ 	if [[ -z $menu_bar_var ]]; then
+ 		echo '  Could not extract menuBarEnabled variable name'
+@@ -926,7 +926,7 @@ patch_quick_window() {
+ 	# Extract the quick window variable name from the unique "pop-up-menu"
+ 	# setAlwaysOnTop call, e.g.: Sa.setAlwaysOnTop(!0,"pop-up-menu")
+ 	local quick_var
+-	quick_var=$(grep -oP '\w+(?=\.setAlwaysOnTop\(\s*!0\s*,\s*"pop-up-menu"\))' \
++	quick_var=$(grep -oP '\$?\w+(?=\.setAlwaysOnTop\(\s*!0\s*,\s*"pop-up-menu"\))' \
+ 		"$index_js" | head -1)
+ 	if [[ -z $quick_var ]]; then
+ 		echo 'WARNING: Could not extract quick window variable name'
+diff --git a/scripts/launcher-common.sh b/scripts/launcher-common.sh
+index ab877e4..987ed9e 100755
+--- a/scripts/launcher-common.sh
++++ b/scripts/launcher-common.sh
+@@ -73,9 +73,12 @@ build_electron_args() {
+ 		return
+ 	fi
+ 
+-	# Wayland: deb/nix packages need --no-sandbox in both modes
+-	[[ $package_type == 'deb' || $package_type == 'nix' ]] \
+-		&& electron_args+=('--no-sandbox')
++	# Wayland: deb/nix pass --no-sandbox only when CLAUDE_ENABLE_SANDBOX=0.
++	# Arch defaults to sandbox on; set CLAUDE_ENABLE_SANDBOX=0 to disable.
++	if [[ ${CLAUDE_ENABLE_SANDBOX:-1} != 1 ]]; then
++		[[ $package_type == 'deb' || $package_type == 'nix' ]] \
++			&& electron_args+=('--no-sandbox')
++	fi
+ 
+ 	if [[ $use_x11_on_wayland == true ]]; then
+ 		# Default: Use X11 via XWayland for global hotkey support
