@@ -1,6 +1,6 @@
-# claude-desktop-archlinux
+# Claude Desktop For Arch Linux
 
-Arch Linux PKGBUILD for Anthropic's Claude Desktop. The actual extraction and Electron repack is done by [`aaddrick/claude-desktop-debian`](https://github.com/aaddrick/claude-desktop-debian); this repo wraps that work in an Arch package, with a small patch on top.
+Arch Linux PKGBUILD for Anthropic's Claude Desktop. The actual extraction and Electron repack is done by [`aaddrick/claude-desktop-debian`](https://github.com/aaddrick/claude-desktop-debian). This repo wraps that work in an Arch package, with a small patch on top.
 
 ## Install
 
